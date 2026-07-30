@@ -5,16 +5,20 @@ export function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.
   const nonce = createNonce();
   const cytoscapeUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'node_modules', 'cytoscape', 'dist', 'cytoscape.min.js'));
   const graphJson = serializeForScript({
-    nodes: graph.nodes.map((node) => ({
-      data: {
-        id: node.id,
-        label: `${node.type}\n${node.id.slice(node.id.indexOf('.') + 1)}`,
-        friendlyLabel: friendlyLabel(node.type),
-        fullLabel: node.id,
-        type: node.type,
-        category: resourceCategory(node.type)
-      }
-    })),
+    nodes: graph.nodes.map((node) => {
+      const label = `${node.type}\n${node.id.slice(node.id.indexOf('.') + 1)}`;
+      return {
+        data: {
+          id: node.id,
+          label,
+          friendlyLabel: friendlyLabel(node.type),
+          displayLabel: label,
+          fullLabel: node.id,
+          type: node.type,
+          category: resourceCategory(node.type)
+        }
+      };
+    }),
     edges: graph.edges.map((edge) => ({ data: { id: edge.id, source: edge.source, target: edge.target } }))
   });
   const diagnostics = escapeHtml(graph.diagnostics.map((diagnostic) => diagnostic.message).join('\n'));
@@ -48,7 +52,7 @@ export function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.
     const graph = ${graphJson};
     const categoryColors = { Networking: '#2f80ed', Compute: '#9b51e0', Storage: '#27ae60', Security: '#f2994a', Monitoring: '#eb5757', General: '#0078d4' };
     const cy = cytoscape({ container: document.getElementById('cy'), elements: [...graph.nodes, ...graph.edges], layout: { name: 'cose', animate: false, padding: 48, nodeRepulsion: 9000, idealEdgeLength: 140, edgeElasticity: 0.45 }, style: [
-      { selector: 'node', style: { 'background-color': (node) => categoryColors[node.data('category')] || categoryColors.General, 'label': 'data(label)', 'text-wrap': 'wrap', 'text-max-width': 130, 'color': '#ffffff', 'text-valign': 'center', 'text-halign': 'center', 'font-size': 10, 'font-weight': 'bold', 'width': 130, 'height': 52, 'padding': 6, 'border-width': 2, 'border-color': '#ffffff' } },
+      { selector: 'node', style: { 'background-color': (node) => categoryColors[node.data('category')] || categoryColors.General, 'label': 'data(displayLabel)', 'text-wrap': 'wrap', 'text-max-width': 130, 'color': '#ffffff', 'text-valign': 'center', 'text-halign': 'center', 'font-size': 10, 'font-weight': 'bold', 'width': 130, 'height': 52, 'padding': 6, 'border-width': 2, 'border-color': '#ffffff' } },
       { selector: 'edge', style: { 'line-color': '#7f8c8d', 'target-arrow-color': '#7f8c8d', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'width': 2 } }
     ] });
     document.getElementById('count').textContent = graph.nodes.length + ' resources';
@@ -56,20 +60,27 @@ export function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.
     document.getElementById('generate-prompt').addEventListener('click', () => vscode.postMessage({ type: 'generateDocumentationPrompt' }));
     const technicalButton = document.getElementById('technical');
     const architectureButton = document.getElementById('architecture');
-    technicalButton.addEventListener('click', () => setMode('technical'));
-    architectureButton.addEventListener('click', () => setMode('architecture'));
     function setMode(mode) {
       const presentation = mode === 'architecture';
-      cy.nodes().style('label', presentation ? 'data(friendlyLabel)' : 'data(label)');
+      cy.nodes().forEach((node) => node.data('displayLabel', presentation ? node.data('friendlyLabel') : node.data('label')));
       cy.nodes().style('font-size', presentation ? 12 : 10);
       cy.nodes().style('width', presentation ? 156 : 130);
       cy.nodes().style('height', presentation ? 62 : 52);
-      cy.layout(presentation ? { name: 'breadthfirst', directed: true, padding: 64, spacingFactor: 1.6 } : { name: 'cose', animate: false, padding: 48, nodeRepulsion: 9000, idealEdgeLength: 140, edgeElasticity: 0.45 }).run();
+      cy.layout(presentation ? { name: 'breadthfirst', directed: true, animate: false, avoidOverlap: true, padding: 64, spacingFactor: 1.6 } : { name: 'cose', animate: false, padding: 48, nodeRepulsion: 9000, idealEdgeLength: 140, edgeElasticity: 0.45 }).run();
+      cy.fit(undefined, 24);
       technicalButton.classList.toggle('active', !presentation);
       architectureButton.classList.toggle('active', presentation);
       document.getElementById('legend').textContent = presentation ? 'Architecture view · click a resource to open Terraform' : 'Click a resource to open Terraform';
     }
     cy.on('tap', 'node', (event) => vscode.postMessage({ type: 'openNode', nodeId: event.target.id() }));
+    window.addEventListener('error', (event) => {
+      vscode.postMessage({ type: 'clientError', message: String(event.error && event.error.stack || event.message) });
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+      vscode.postMessage({ type: 'clientError', message: String(event.reason && event.reason.stack || event.reason) });
+    });
+    technicalButton.addEventListener('click', () => { try { setMode('technical'); } catch (error) { vscode.postMessage({ type: 'clientError', message: String(error && error.stack || error) }); } });
+    architectureButton.addEventListener('click', () => { try { setMode('architecture'); } catch (error) { vscode.postMessage({ type: 'clientError', message: String(error && error.stack || error) }); } });
   </script>
 </body>
 </html>`;

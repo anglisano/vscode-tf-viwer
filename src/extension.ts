@@ -28,12 +28,14 @@ async function showGraph(context: vscode.ExtensionContext, sidebar: TerraformSid
       localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'cytoscape')]
     });
     panel.onDidDispose(() => { panel = undefined; }, undefined, context.subscriptions);
-    panel.webview.onDidReceiveMessage(async (message: { type?: string; nodeId?: string }) => {
+    panel.webview.onDidReceiveMessage(async (message: { type?: string; nodeId?: string; message?: string }) => {
       if (message.type === 'openNode' && latestGraph && message.nodeId) {
         await openNode(latestGraph.nodes.find((node) => node.id === message.nodeId));
       } else if (message.type === 'generateDocumentationPrompt' && latestGraph) {
         const configuredPrompt = vscode.workspace.getConfiguration('terraformViewer').get<string>('documentationPrompt', '').trim() || DEFAULT_DOCUMENTATION_PROMPT;
         await generateDocumentationPrompt(configuredPrompt, latestGraph);
+      } else if (message.type === 'clientError') {
+        void vscode.window.showErrorMessage(`Terraform Viewer graph view error: ${message.message ?? 'unknown error'}`);
       }
     }, undefined, context.subscriptions);
   }
