@@ -1,4 +1,5 @@
 import * as assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
 import * as vscode from 'vscode';
 
 suite('Terraform Viewer extension', () => {
