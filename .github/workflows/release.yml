@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node.js LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate and test
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run test:unit
+          xvfb-run -a npm run test:integration
+      - name: Package VSIX
+        run: npm run package
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-viewer-vsix
+          path: '*.vsix'
+      - name: Publish GitHub release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: '*.vsix'
+      - name: Publish to VS Code Marketplace
+        if: startsWith(github.ref, 'refs/tags/')
+        run: npx vsce publish --packagePath "$(find . -maxdepth 1 -name '*.vsix' -print -quit)"
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}

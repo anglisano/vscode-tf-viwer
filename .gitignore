@@ -1,0 +1,10 @@
+node_modules/
+out/
+out-test/
+.vscode-test/
+coverage/
+vsix-inspect/
+*.vsix
+.DS_Store
+.github/prompts/*
+.vscode/terraform-viewer/

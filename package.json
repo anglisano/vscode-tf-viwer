@@ -1,0 +1,122 @@
+{
+  "name": "terraform-viewer",
+  "displayName": "Terraform Viewer",
+  "description": "Visualize Terraform Azure resources and their relationships in VS Code.",
+  "version": "1.0.0",
+  "icon": "media/icon.png",
+  "publisher": "anglisano",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anglisano/terraform-viewer.git"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Visualization"
+  ],
+  "keywords": [
+    "terraform",
+    "azure",
+    "azurerm",
+    "infrastructure",
+    "architecture",
+    "visualization"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "terraformViewer.showGraph",
+        "title": "Terraform Viewer: Show Architecture Graph",
+        "category": "Terraform Viewer"
+      },
+      {
+        "command": "terraformViewer.refreshGraph",
+        "title": "Terraform Viewer: Refresh Graph",
+        "category": "Terraform Viewer"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "terraformViewer",
+          "title": "Terraform Viewer",
+          "icon": "./media/terraform-viewer.svg"
+        }
+      ]
+    },
+    "views": {
+      "terraformViewer": [
+        {
+          "id": "terraformViewer.sidebar",
+          "name": "Terraform Graph"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Terraform Viewer",
+      "properties": {
+        "terraformViewer.documentationPrompt": {
+          "type": "string",
+          "default": "",
+          "description": "Optional override for the packaged Terraform documentation prompt. Leave empty to use the prompt from prompts/terraform-documentation.prompt.md.",
+          "scope": "resource"
+        }
+      }
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "terraformViewer.showGraph"
+        },
+        {
+          "command": "terraformViewer.refreshGraph"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "terraformViewer.showGraph",
+          "when": "view == terraformViewer.sidebar",
+          "group": "navigation@1"
+        },
+        {
+          "command": "terraformViewer.refreshGraph",
+          "when": "view == terraformViewer.sidebar",
+          "group": "navigation@2"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "typecheck": "tsc --noEmit -p ./",
+    "lint": "eslint .",
+    "test:unit": "mocha --require ts-node/register \"test/unit/**/*.test.ts\"",
+    "test:compile": "npm run compile && tsc -p tsconfig.test.json",
+    "test:unit:coverage": "npm run compile && tsc -p tsconfig.test.json && c8 --all --include=out-test/src/**/*.js --reporter=text --reporter=html mocha \"out-test/test/unit/**/*.test.js\"",
+    "test:integration": "npm run compile && tsc -p tsconfig.test.json && node ./out-test/test/runTest.js",
+    "test": "npm run test:unit && npm run test:integration",
+    "package": "npm run compile && vsce package",
+    "vscode:prepublish": "npm run compile"
+  },
+  "dependencies": {
+    "cytoscape": "^3.34.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.15.0",
+    "@types/vscode": "^1.95.0",
+    "@typescript-eslint/eslint-plugin": "^8.33.0",
+    "@typescript-eslint/parser": "^8.33.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.6.0",
+    "c8": "^12.0.0",
+    "eslint": "^9.27.0",
+    "mocha": "^11.7.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}

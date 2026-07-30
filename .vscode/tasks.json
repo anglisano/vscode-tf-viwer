@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "compile",
+      "type": "shell",
+      "command": "npm run compile",
+      "problemMatcher": "$tsc",
+      "group": "build"
+    },
+    {
+      "label": "test:compile",
+      "type": "shell",
+      "command": "npm run compile && tsc -p tsconfig.test.json",
+      "problemMatcher": "$tsc",
+      "group": "test"
+    }
+  ]
+}
