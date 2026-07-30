@@ -1,9 +1,14 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { TerraformGraph } from './model';
 
-export const DEFAULT_DOCUMENTATION_PROMPT = readFileSync(
+const documentationPromptPath = [
   join(__dirname, '..', 'prompts', 'terraform-documentation.prompt.md'),
+  join(__dirname, '..', '..', 'prompts', 'terraform-documentation.prompt.md')
+].find((path) => existsSync(path));
+
+export const DEFAULT_DOCUMENTATION_PROMPT = readFileSync(
+  documentationPromptPath ?? join(__dirname, '..', 'prompts', 'terraform-documentation.prompt.md'),
   'utf8'
 ).trim();
 
