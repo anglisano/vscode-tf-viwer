@@ -78,7 +78,7 @@ resource "azurerm_resource_group" "main" {
   });
 
   it('defines the selectable layouts with technical names and image export', () => {
-    const webviewSource = fs.readFileSync(path.join(__dirname, '../../src/webview.ts'), 'utf8');
+    const webviewSource = fs.readFileSync(path.join(process.cwd(), 'src/webview.ts'), 'utf8');
 
     for (const label of [
       'Technical (concentric)',
