@@ -25,15 +25,22 @@ async function showGraph(context: vscode.ExtensionContext, sidebar: TerraformSid
   if (!panel) {
     panel = vscode.window.createWebviewPanel('terraformViewer.graph', 'Terraform Architecture', vscode.ViewColumn.Active, {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'cytoscape')]
+      localResourceRoots: [
+        vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'cytoscape'),
+        vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'cytoscape-dagre'),
+        vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'cytoscape-elk'),
+        vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'elkjs')
+      ]
     });
     panel.onDidDispose(() => { panel = undefined; }, undefined, context.subscriptions);
-    panel.webview.onDidReceiveMessage(async (message: { type?: string; nodeId?: string; message?: string }) => {
+    panel.webview.onDidReceiveMessage(async (message: { type?: string; nodeId?: string; message?: string; data?: string }) => {
       if (message.type === 'openNode' && latestGraph && message.nodeId) {
         await openNode(latestGraph.nodes.find((node) => node.id === message.nodeId));
       } else if (message.type === 'generateDocumentationPrompt' && latestGraph) {
         const configuredPrompt = vscode.workspace.getConfiguration('terraformViewer').get<string>('documentationPrompt', '').trim() || DEFAULT_DOCUMENTATION_PROMPT;
         await generateDocumentationPrompt(configuredPrompt, latestGraph);
+      } else if (message.type === 'saveImage' && message.data) {
+        await saveGraphImage(message.data);
       } else if (message.type === 'clientError') {
         void vscode.window.showErrorMessage(`Terraform Viewer graph view error: ${message.message ?? 'unknown error'}`);
       }
@@ -41,6 +48,28 @@ async function showGraph(context: vscode.ExtensionContext, sidebar: TerraformSid
   }
   await refreshGraph(context, sidebar);
   panel.reveal(vscode.ViewColumn.Active);
+}
+
+async function saveGraphImage(dataUrl: string): Promise<void> {
+  const imageUri = await vscode.window.showSaveDialog({
+    defaultUri: vscode.Uri.joinPath(vscode.workspace.workspaceFolders?.[0]?.uri ?? vscode.Uri.file(''), 'terraform-graph.png'),
+    filters: { PNG: ['png'] },
+    saveLabel: 'Save graph image'
+  });
+  if (!imageUri) {
+    return;
+  }
+  const base64Data = dataUrl.match(/^data:image\/png;base64,(.+)$/)?.[1];
+  if (!base64Data) {
+    void vscode.window.showErrorMessage('Terraform Viewer could not prepare the graph image.');
+    return;
+  }
+  try {
+    await vscode.workspace.fs.writeFile(imageUri, Buffer.from(base64Data, 'base64'));
+    void vscode.window.showInformationMessage(`Graph image saved to ${imageUri.fsPath}.`);
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Terraform Viewer could not save the graph image: ${String(error)}`);
+  }
 }
 
 async function generateDocumentationPrompt(basePrompt: string, graph: TerraformGraph): Promise<void> {

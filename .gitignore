@@ -9,3 +9,4 @@ vsix-inspect/
 .github/prompts/*
 .vscode/terraform-viewer/
 .vscode/branchnotes/
+.npm-cache/*

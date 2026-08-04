@@ -10,6 +10,8 @@ Terraform Viewer is a VS Code extension for inspecting Terraform architecture as
 - Opens the source resource in the editor when a graph node is clicked.
 - Refreshes the graph after Terraform files are saved.
 - Runs Cytoscape from the packaged extension, so the graph does not require a CDN or Internet access.
+- Provides selectable graph layouts: `Technical (concentric)`, `Hierarchical (dagre)`, `Architecture (elk)`, `Radial (circle)`, `Grid (grid)`, and `Free (cose)`.
+- Saves the complete graph as a PNG image with **Save image**.
 - Reports unreadable or unsupported Terraform files without hiding valid resources from other files.
 - Generates a Copilot prompt file with the current Mermaid graph for generating architecture documentation.
 
@@ -17,7 +19,9 @@ Terraform Viewer is a VS Code extension for inspecting Terraform architecture as
 
 Open the Command Palette and run **Terraform Viewer: Show Architecture Graph**. The extension opens the architecture graph in a new editor tab. Use **Terraform Viewer: Refresh Graph** to rebuild it manually.
 
-The Terraform Viewer activity-bar view shows the current resource count and diagnostics after the graph has been loaded.
+The Terraform Viewer activity-bar view shows the current resource count and diagnostics after the graph has been loaded. The graph opens with `Technical (concentric)`, which places highly connected resources near the center. Use the layout selector to switch to a hierarchical, architecture-focused, radial, grid, or free-force view. The label includes the Terraform resource type and instance name in every layout.
+
+Use **Save image** to save a PNG of the complete graph, including nodes outside the current viewport.
 
 ## Architecture documentation
 

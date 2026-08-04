@@ -1,4 +1,6 @@
 import * as assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { parseTerraformContent } from '../../src/parser';
 import { buildDocumentationPrompt, DEFAULT_DOCUMENTATION_PROMPT, graphToMermaid } from '../../src/mermaid';
 
@@ -73,5 +75,24 @@ resource "azurerm_resource_group" "main" {
     assert.ok(DEFAULT_DOCUMENTATION_PROMPT.includes('docs/terraform-architecture.md'));
     assert.ok(DEFAULT_DOCUMENTATION_PROMPT.includes('Do not only return the document in the chat'));
     assert.ok(DEFAULT_DOCUMENTATION_PROMPT.includes('several focused Mermaid diagrams'));
+  });
+
+  it('defines the selectable layouts with technical names and image export', () => {
+    const webviewSource = fs.readFileSync(path.join(__dirname, '../../src/webview.ts'), 'utf8');
+
+    for (const label of [
+      'Technical (concentric)',
+      'Hierarchical (dagre)',
+      'Architecture (elk)',
+      'Radial (circle)',
+      'Grid (grid)',
+      'Free (cose)'
+    ]) {
+      assert.ok(webviewSource.includes(label));
+    }
+    assert.ok(webviewSource.includes("value=\"technical\""));
+    assert.ok(webviewSource.includes("cy.png({ full: true, scale: 2"));
+    assert.ok(webviewSource.indexOf("node_modules', 'elkjs', 'lib', 'elk.bundled.js'") < webviewSource.indexOf("node_modules', 'cytoscape-elk', 'dist', 'cytoscape-elk.js'"));
+    assert.ok(webviewSource.indexOf('src="${elkjsUri}"') < webviewSource.indexOf('src="${elkUri}"'));
   });
 });
