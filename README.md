@@ -1,11 +1,15 @@
 # Terraform Viewer
 
-Terraform Viewer is a VS Code extension for inspecting Terraform architecture as an interactive graph. The first version focuses on Azure resources declared with the `azurerm` provider.
+Terraform Viewer is a VS Code extension for inspecting multi-provider Terraform architecture as an interactive graph.
+
+<p align="center">
+  <img src="media/demo.gif" alt="BranchNotes extension demo" width="800">
+</p>
 
 ## Features
 
 - Finds `.tf` files in the current workspace.
-- Displays Azure `azurerm_*` resources as graph nodes.
+- Displays resources from any provider, plus `data` sources and module boundaries.
 - Connects resources through direct Terraform references, including references across files.
 - Opens the source resource in the editor when a graph node is clicked.
 - Refreshes the graph after Terraform files are saved.
@@ -25,27 +29,37 @@ Use **Save image** to save a PNG of the complete graph, including nodes outside 
 
 ## Architecture documentation
 
+<p align="center">
+  <img src="media/demo1.gif" alt="BranchNotes extension demo" width="800">
+</p>
+
 Use **Generate Documentation Prompt** in the graph toolbar to create `.github/prompts/terraform-architecture-documentation.generated.prompt.md`. The generated prompt includes the current Mermaid graph and asks Copilot to inspect the Terraform repository and write a presentation-ready Markdown document to `docs/terraform-architecture.md`. It allows several focused Mermaid diagrams when one diagram would be too dense. The file is opened automatically after generation so you can review or invoke it manually.
+
+After the file is generated and opened, the extension asks whether you want to run it in Copilot Chat. Choose **Run in Copilot** to open the chat with `/terraform-architecture-documentation-generated` prefilled, or **Keep open** to review the file and run it later. Copilot uses the model selected in your current chat. The prompt file remains in the workspace so you can review, version, or regenerate it before running it.
 
 The base prompt can be customized in **Settings → Extensions → Terraform Viewer → Documentation Prompt**, or with:
 
 ```json
 {
-  "terraformViewer.documentationPrompt": "Act as an expert in Terraform and Azure architecture..."
+  "terraformViewer.documentationPrompt": "Act as an expert in Terraform and cloud architecture..."
 }
 ```
 
 ## Current scope
 
-The current MVP recognizes `resource` blocks whose type starts with `azurerm_` and resolves direct references such as:
+The current MVP recognizes `resource` and `data` blocks from any provider and resolves direct references such as:
 
 ```hcl
-resource "azurerm_storage_account" "main" {
-  resource_group_name = azurerm_resource_group.main.name
+resource "aws_instance" "main" {
+  subnet_id = aws_subnet.main.id
 }
 ```
 
-Modules, data sources, variables, outputs, dynamic expression evaluation, and other cloud providers are not yet rendered as graph nodes. The internal graph model is provider-neutral so these can be added incrementally.
+Local modules are inspected and their nodes are namespace-prefixed, for example `module.network.aws_vpc.main`. A module from a registry, Git, or HTTP source is shown as an unresolved boundary when its source is not already available locally. Terraform is not executed and modules are not downloaded automatically.
+
+References that cannot be mapped to an available node are listed with their file, source range, and reason instead of being silently discarded. Dynamic expressions, variables, outputs, and full HCL evaluation remain intentionally limited.
+
+The repository includes a no-credentials multi-cloud integration fixture at `test/fixtures/multicloud-workspace`, with AWS and Google resources, a data source, an accessible local module, an inaccessible external module, and an intentionally unmapped reference.
 
 ## Development
 

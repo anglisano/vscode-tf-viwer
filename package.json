@@ -1,8 +1,8 @@
 {
   "name": "terraform-viewer",
   "displayName": "Terraform Viewer",
-  "description": "Visualize Terraform Azure resources and their relationships in VS Code.",
-  "version": "1.0.2",
+  "description": "Visualize multi-provider Terraform resources, data sources, and modules in VS Code.",
+  "version": "1.1.0",
   "icon": "media/icon.png",
   "publisher": "anglisano",
   "license": "MIT",
@@ -18,8 +18,9 @@
   ],
   "keywords": [
     "terraform",
-    "azure",
-    "azurerm",
+    "cloud",
+    "aws",
+    "google-cloud",
     "infrastructure",
     "architecture",
     "visualization"

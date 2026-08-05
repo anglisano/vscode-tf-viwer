@@ -11,14 +11,24 @@ export function activate(context: vscode.ExtensionContext): void {
   const sidebar = new TerraformSidebarProvider();
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('terraformViewer.sidebar', sidebar),
-    vscode.commands.registerCommand('terraformViewer.showGraph', () => showGraph(context, sidebar)),
-    vscode.commands.registerCommand('terraformViewer.refreshGraph', () => refreshGraph(context, sidebar)),
+    vscode.commands.registerCommand('terraformViewer.showGraph', () => runSafely(() => showGraph(context, sidebar))),
+    vscode.commands.registerCommand('terraformViewer.refreshGraph', () => runSafely(() => refreshGraph(context, sidebar))),
+    vscode.commands.registerCommand('terraformViewer.openUnmapped', (index: number) => latestGraph ? openUnmapped(latestGraph, index) : undefined),
+    vscode.commands.registerCommand('terraformViewer.copyUnmapped', () => latestGraph ? copyUnmappedToFile(latestGraph) : undefined),
     vscode.workspace.onDidSaveTextDocument((document) => {
       if (document.fileName.endsWith('.tf') && panel) {
         void refreshGraph(context, sidebar);
       }
     })
   );
+}
+
+async function runSafely(operation: () => Promise<void>): Promise<void> {
+  try {
+    await operation();
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Terraform Viewer could not update the graph: ${String(error)}`);
+  }
 }
 
 async function showGraph(context: vscode.ExtensionContext, sidebar: TerraformSidebarProvider): Promise<void> {
@@ -81,12 +91,38 @@ async function generateDocumentationPrompt(basePrompt: string, graph: TerraformG
 
   const promptsDirectory = vscode.Uri.joinPath(workspaceFolder.uri, '.github', 'prompts');
   const promptUri = vscode.Uri.joinPath(promptsDirectory, 'terraform-architecture-documentation.generated.prompt.md');
-  const header = `---\nname: terraform-architecture-documentation-generated\ndescription: Generated Terraform Azure architecture documentation prompt for the current workspace.\n---\n\n`;
+  const header = `---\nname: terraform-architecture-documentation-generated\ndescription: Generated multi-provider Terraform architecture documentation prompt for the current workspace.\n---\n\n`;
   await vscode.workspace.fs.createDirectory(promptsDirectory);
   await vscode.workspace.fs.writeFile(promptUri, Buffer.from(`${header}${buildDocumentationPrompt(basePrompt, graph)}`, 'utf8'));
   const document = await vscode.workspace.openTextDocument(promptUri);
   await vscode.window.showTextDocument(document, vscode.ViewColumn.Active);
-  void vscode.window.showInformationMessage(`Generated ${promptUri.path.split('/').pop()}.`);
+  const runInCopilot = await vscode.window.showInformationMessage(
+    `Generated ${promptUri.path.split('/').pop()}. Do you want to run it in Copilot Chat?`,
+    'Run in Copilot',
+    'Keep open'
+  );
+  if (runInCopilot !== 'Run in Copilot') {
+    return;
+  }
+
+  const chatCommand = 'workbench.action.chat.open';
+  const commands = await vscode.commands.getCommands(true);
+  if (!commands.includes(chatCommand)) {
+    void vscode.window.showWarningMessage(
+      'Copilot Chat is not available. Run /terraform-architecture-documentation-generated in Copilot Chat.'
+    );
+    return;
+  }
+
+  try {
+    await vscode.commands.executeCommand(chatCommand, {
+      query: '/terraform-architecture-documentation-generated'
+    });
+  } catch (error) {
+    void vscode.window.showWarningMessage(
+      `Could not open Copilot Chat. Run /terraform-architecture-documentation-generated manually. ${String(error)}`
+    );
+  }
 }
 
 async function refreshGraph(context: vscode.ExtensionContext, sidebar: TerraformSidebarProvider): Promise<void> {
@@ -110,6 +146,57 @@ async function openNode(node: TerraformNode | undefined): Promise<void> {
   editor.revealRange(editor.selection, vscode.TextEditorRevealType.InCenter);
 }
 
+async function openUnmapped(graph: TerraformGraph, index: number): Promise<void> {
+  const item = graph.unmappedItems[index];
+  if (!item) {
+    return;
+  }
+  const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(item.sourceUri));
+  const editor = await vscode.window.showTextDocument(document, vscode.ViewColumn.Active);
+  editor.selection = new vscode.Selection(
+    new vscode.Position(item.sourceRange.start.line, item.sourceRange.start.character),
+    new vscode.Position(item.sourceRange.end.line, item.sourceRange.end.character)
+  );
+  editor.revealRange(editor.selection, vscode.TextEditorRevealType.InCenter);
+}
+
+async function copyUnmappedToFile(graph: TerraformGraph): Promise<void> {
+  const defaultUri = vscode.Uri.joinPath(
+    vscode.workspace.workspaceFolders?.[0]?.uri ?? vscode.Uri.file(''),
+    'terraform-viewer-unmapped-items.md'
+  );
+  const fileUri = await vscode.window.showSaveDialog({
+    defaultUri,
+    filters: { Markdown: ['md'] },
+    saveLabel: 'Save unmapped items'
+  });
+  if (!fileUri) {
+    return;
+  }
+  const content = [
+    '# Terraform Viewer: unmapped items',
+    '',
+    `Generated: ${new Date().toISOString()}`,
+    '',
+    ...graph.unmappedItems.flatMap((item, index) => [
+      `## ${index + 1}. ${item.label}`,
+      '',
+      `- Kind: ${item.kind}`,
+      `- Reason: ${item.reason}`,
+      `- Source: ${item.sourceUri}`,
+      `- Range: ${item.sourceRange.start.line + 1}:${item.sourceRange.start.character + 1}-${item.sourceRange.end.line + 1}:${item.sourceRange.end.character + 1}`,
+      ...(item.target ? [`- Target: ${item.target}`] : []),
+      ''
+    ])
+  ].join('\n');
+  try {
+    await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content, 'utf8'));
+    void vscode.window.showInformationMessage(`Saved ${fileUri.path.split('/').pop()}.`);
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Terraform Viewer could not save the unmapped items: ${String(error)}`);
+  }
+}
+
 class TerraformSidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   private readonly changeEmitter = new vscode.EventEmitter<void>();
   private graph: TerraformGraph | undefined;
@@ -124,7 +211,10 @@ class TerraformSidebarProvider implements vscode.TreeDataProvider<vscode.TreeIte
     return element;
   }
 
-  getChildren(): vscode.TreeItem[] {
+  getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
+    if (element?.contextValue === 'terraformViewer.issues') {
+      return this.getIssueItems();
+    }
     const showGraphItem = new vscode.TreeItem('Show Architecture Graph', vscode.TreeItemCollapsibleState.None);
     showGraphItem.command = { command: 'terraformViewer.showGraph', title: 'Show Architecture Graph' };
     showGraphItem.iconPath = new vscode.ThemeIcon('graph');
@@ -135,14 +225,37 @@ class TerraformSidebarProvider implements vscode.TreeDataProvider<vscode.TreeIte
 
     const items = [showGraphItem, refreshGraphItem];
     if (this.graph) {
-      const resourceItem = new vscode.TreeItem(`${this.graph.nodes.length} Azure resources`, vscode.TreeItemCollapsibleState.None);
+      const resourceItem = new vscode.TreeItem(`${this.graph.nodes.length} Terraform nodes`, vscode.TreeItemCollapsibleState.None);
       resourceItem.iconPath = new vscode.ThemeIcon('symbol-namespace');
       items.push(resourceItem);
     }
-    if (this.graph && this.graph.diagnostics.length > 0) {
-      const diagnosticsItem = new vscode.TreeItem(`${this.graph.diagnostics.length} diagnostics`, vscode.TreeItemCollapsibleState.None);
+    if (this.graph && (this.graph.diagnostics.length > 0 || this.graph.unmappedItems.length > 0)) {
+      const issueCount = this.graph.diagnostics.length + this.graph.unmappedItems.length;
+      const diagnosticsItem = new vscode.TreeItem(`Issues (${issueCount})`, vscode.TreeItemCollapsibleState.Collapsed);
+      diagnosticsItem.contextValue = 'terraformViewer.issues';
       diagnosticsItem.iconPath = new vscode.ThemeIcon('warning');
       items.push(diagnosticsItem);
+    }
+    return items;
+  }
+
+  private getIssueItems(): vscode.TreeItem[] {
+    if (!this.graph) {
+      return [];
+    }
+    const items = this.graph.unmappedItems.map((item, index) => {
+      const issue = new vscode.TreeItem(item.label, vscode.TreeItemCollapsibleState.None);
+      issue.description = item.reason;
+      issue.tooltip = `${item.reason}\n${item.sourceUri}`;
+      issue.iconPath = new vscode.ThemeIcon(item.kind === 'block' ? 'package' : 'warning');
+      issue.command = { command: 'terraformViewer.openUnmapped', title: 'Open Terraform source', arguments: [index] };
+      return issue;
+    });
+    if (this.graph.unmappedItems.length > 0) {
+      const copyItem = new vscode.TreeItem('Copy issues to Markdown file', vscode.TreeItemCollapsibleState.None);
+      copyItem.iconPath = new vscode.ThemeIcon('save');
+      copyItem.command = { command: 'terraformViewer.copyUnmapped', title: 'Copy issues to Markdown file' };
+      items.unshift(copyItem);
     }
     return items;
   }

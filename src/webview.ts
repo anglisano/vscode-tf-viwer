@@ -17,6 +17,8 @@ export function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.
           displayLabel: label,
           fullLabel: node.id,
           type: node.type,
+          kind: node.kind,
+          resolution: node.resolution,
           category: resourceCategory(node.type)
         }
       };
@@ -34,9 +36,9 @@ export function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.
   <title>Terraform Architecture Graph</title>
   <style>
     :root { color-scheme: light dark; }
-    body { margin: 0; background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); font-family: var(--vscode-font-family); }
+    body { display: flex; flex-direction: column; height: 100vh; margin: 0; background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); font-family: var(--vscode-font-family); }
     #toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 42px; padding: 6px 12px; border-bottom: 1px solid var(--vscode-panel-border); box-sizing: border-box; }
-    #cy { height: calc(100vh - 42px); width: 100vw; }
+    #cy { flex: 1; min-height: 0; width: 100vw; }
     #diagnostics { color: var(--vscode-editorWarning-foreground); white-space: pre-wrap; }
     #legend { color: var(--vscode-descriptionForeground); margin-left: auto; font-size: 12px; }
     select { color: var(--vscode-dropdown-foreground); background: var(--vscode-dropdown-background); border: 1px solid var(--vscode-dropdown-border); padding: 5px 8px; cursor: pointer; }
@@ -45,7 +47,7 @@ export function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.
   </style>
 </head>
 <body>
-  <div id="toolbar"><select id="layout" aria-label="Graph layout"><option value="technical">Technical (concentric)</option><option value="hierarchical">Hierarchical (dagre)</option><option value="architecture">Architecture (elk)</option><option value="radial">Radial (circle)</option><option value="grid">Grid (grid)</option><option value="free">Free (cose)</option></select><button id="save-image" type="button" title="Save a PNG image of the graph">↓ Save image</button><button id="fit" type="button">Fit graph</button><button id="generate-prompt" type="button">Generate Documentation Prompt</button><span id="count"></span><span id="diagnostics">${diagnostics}</span><span id="legend">Click a resource to open Terraform</span></div>
+  <div id="toolbar"><select id="layout" aria-label="Graph layout"><option value="technical">Technical (concentric)</option><option value="hierarchical">Hierarchical (dagre)</option><option value="architecture" selected>Architecture (elk)</option><option value="radial">Radial (circle)</option><option value="grid">Grid (grid)</option><option value="free">Free (cose)</option></select><button id="save-image" type="button" title="Save a PNG image of the graph">↓ Save image</button><button id="fit" type="button">Fit graph</button><button id="generate-prompt" type="button">Generate Documentation Prompt</button><span id="count"></span><span id="diagnostics">${diagnostics}</span><span id="legend">Architecture (elk) · Click a resource to open Terraform</span></div>
   <div id="cy" aria-label="Terraform architecture graph"></div>
   <script nonce="${nonce}" src="${cytoscapeUri}"></script>
   <script nonce="${nonce}" src="${dagreUri}"></script>
@@ -76,8 +78,9 @@ export function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.
       }
       return technicalLayout();
     }
-    const cy = cytoscape({ container: document.getElementById('cy'), elements: [...graph.nodes, ...graph.edges], layout: technicalLayout(), style: [
+    const cy = cytoscape({ container: document.getElementById('cy'), elements: [...graph.nodes, ...graph.edges], layout: layoutOptions('architecture'), style: [
       { selector: 'node', style: { 'background-color': (node) => categoryColors[node.data('category')] || categoryColors.General, 'label': 'data(displayLabel)', 'text-wrap': 'wrap', 'text-max-width': 130, 'color': '#ffffff', 'text-valign': 'center', 'text-halign': 'center', 'font-size': 10, 'font-weight': 'bold', 'width': 130, 'height': 52, 'padding': 6, 'border-width': 2, 'border-color': '#ffffff' } },
+      { selector: 'node[resolution = "unresolved"]', style: { 'background-color': '#616161', 'border-style': 'dashed', 'border-color': '#f2c94c' } },
       { selector: 'edge', style: { 'line-color': '#7f8c8d', 'target-arrow-color': '#7f8c8d', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'width': 2 } }
     ] });
     document.getElementById('count').textContent = graph.nodes.length + ' resources';
@@ -136,16 +139,19 @@ function serializeForScript(value: unknown): string {
 }
 
 function resourceCategory(type: string): string {
-  if (/(virtual_network|subnet|network_security|route|public_ip|firewall|load_balancer)/.test(type)) {
+  if (/(network|subnet|route|firewall|security_group|load_balancer|vpc)/.test(type)) {
     return 'Networking';
   }
-  if (/(virtual_machine|linux_web_app|windows_web_app|container|kubernetes|function_app|service_plan)/.test(type)) {
+  if (/(instance|virtual_machine|container|kubernetes|function|compute|lambda|service)/.test(type)) {
     return 'Compute';
   }
-  if (/(storage|key_vault|managed_disk|sql|cosmos|redis)/.test(type)) {
-    return type.includes('key_vault') ? 'Security' : 'Storage';
+  if (/(storage|bucket|disk|sql|database|cosmos|redis|s3)/.test(type)) {
+    return 'Storage';
   }
-  if (/(monitor|log_analytics|application_insights|diagnostic)/.test(type)) {
+  if (/(key|iam|role|policy|security)/.test(type)) {
+    return 'Security';
+  }
+  if (/(monitor|log|insight|diagnostic)/.test(type)) {
     return 'Monitoring';
   }
   return 'General';

@@ -19,7 +19,8 @@ async function main(): Promise<void> {
     await runTests({
       vscodeExecutablePath,
       extensionDevelopmentPath: path.resolve(__dirname, '../..'),
-      extensionTestsPath: path.resolve(__dirname, 'suite')
+      extensionTestsPath: path.resolve(__dirname, 'suite'),
+      launchArgs: [path.resolve(__dirname, '../../test/fixtures/multicloud-workspace')]
     });
   } catch (error) {
     process.stderr.write(`Failed to run extension tests: ${String(error)}\n`);

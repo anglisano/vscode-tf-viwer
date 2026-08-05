@@ -11,6 +11,15 @@
       "preLaunchTask": "compile"
     },
     {
+      "name": "Run Extension on Multi-cloud Fixture",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}", "${workspaceFolder}/test/fixtures/multicloud-workspace"],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "compile"
+    },
+    {
       "name": "Run Extension Tests",
       "type": "extensionHost",
       "request": "launch",
