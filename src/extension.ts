@@ -14,6 +14,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('terraformViewer.showGraph', () => runSafely(() => showGraph(context, sidebar))),
     vscode.commands.registerCommand('terraformViewer.refreshGraph', () => runSafely(() => refreshGraph(context, sidebar))),
     vscode.commands.registerCommand('terraformViewer.openUnmapped', (index: number) => latestGraph ? openUnmapped(latestGraph, index) : undefined),
+    vscode.commands.registerCommand('terraformViewer.openDiagnostic', (index: number) => latestGraph ? openDiagnostic(latestGraph, index) : undefined),
     vscode.commands.registerCommand('terraformViewer.copyUnmapped', () => latestGraph ? copyUnmappedToFile(latestGraph) : undefined),
     vscode.workspace.onDidSaveTextDocument((document) => {
       if (document.fileName.endsWith('.tf') && panel) {
@@ -160,6 +161,22 @@ async function openUnmapped(graph: TerraformGraph, index: number): Promise<void>
   editor.revealRange(editor.selection, vscode.TextEditorRevealType.InCenter);
 }
 
+async function openDiagnostic(graph: TerraformGraph, index: number): Promise<void> {
+  const diagnostic = graph.diagnostics[index];
+  if (!diagnostic) {
+    return;
+  }
+  const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(diagnostic.sourceUri));
+  const editor = await vscode.window.showTextDocument(document, vscode.ViewColumn.Active);
+  if (diagnostic.sourceRange) {
+    editor.selection = new vscode.Selection(
+      new vscode.Position(diagnostic.sourceRange.start.line, diagnostic.sourceRange.start.character),
+      new vscode.Position(diagnostic.sourceRange.end.line, diagnostic.sourceRange.end.character)
+    );
+    editor.revealRange(editor.selection, vscode.TextEditorRevealType.InCenter);
+  }
+}
+
 async function copyUnmappedToFile(graph: TerraformGraph): Promise<void> {
   const defaultUri = vscode.Uri.joinPath(
     vscode.workspace.workspaceFolders?.[0]?.uri ?? vscode.Uri.file(''),
@@ -243,14 +260,23 @@ class TerraformSidebarProvider implements vscode.TreeDataProvider<vscode.TreeIte
     if (!this.graph) {
       return [];
     }
-    const items = this.graph.unmappedItems.map((item, index) => {
+    const diagnosticItems = this.graph.diagnostics.map((diagnostic, index) => {
+      const issue = new vscode.TreeItem(diagnostic.message, vscode.TreeItemCollapsibleState.None);
+      issue.description = sourceFileName(diagnostic.sourceUri);
+      issue.tooltip = `${diagnostic.message}\n${diagnostic.sourceUri}`;
+      issue.iconPath = new vscode.ThemeIcon(diagnostic.severity === 'error' ? 'error' : 'warning');
+      issue.command = { command: 'terraformViewer.openDiagnostic', title: 'Open Terraform source', arguments: [index] };
+      return issue;
+    });
+    const unmappedItems = this.graph.unmappedItems.map((item, index) => {
       const issue = new vscode.TreeItem(item.label, vscode.TreeItemCollapsibleState.None);
-      issue.description = item.reason;
+      issue.description = `${sourceFileName(item.sourceUri)}: ${item.reason}`;
       issue.tooltip = `${item.reason}\n${item.sourceUri}`;
       issue.iconPath = new vscode.ThemeIcon(item.kind === 'block' ? 'package' : 'warning');
       issue.command = { command: 'terraformViewer.openUnmapped', title: 'Open Terraform source', arguments: [index] };
       return issue;
     });
+    const items = [...diagnosticItems, ...unmappedItems];
     if (this.graph.unmappedItems.length > 0) {
       const copyItem = new vscode.TreeItem('Copy issues to Markdown file', vscode.TreeItemCollapsibleState.None);
       copyItem.iconPath = new vscode.ThemeIcon('save');
@@ -258,6 +284,14 @@ class TerraformSidebarProvider implements vscode.TreeDataProvider<vscode.TreeIte
       items.unshift(copyItem);
     }
     return items;
+  }
+}
+
+function sourceFileName(sourceUri: string): string {
+  try {
+    return vscode.Uri.parse(sourceUri).path.split('/').pop() || sourceUri;
+  } catch {
+    return sourceUri;
   }
 }
 

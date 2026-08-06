@@ -82,6 +82,34 @@ resource "google_compute_instance" "app" {
     assert.equal(graph.edges.length, 0);
   });
 
+  it('accepts output and variable blocks without graph diagnostics', () => {
+    const content = `output "resource_id" {
+  description = "The resource data is exposed by this module"
+  value = azurerm_resource_group.main.id
+}
+
+variable "name" {
+  description = "Name of the resource module"
+  type = string
+}`;
+    const graph = parseTerraformContent(content, '/workspace/outputs.tf');
+
+    assert.equal(graph.nodes.length, 0);
+    assert.equal(graph.diagnostics.length, 0);
+  });
+
+  it('reports an incomplete supported block while ignoring keywords in comments and strings', () => {
+    const content = `# resource "commented" "block" {
+  description = "module data resource"
+}
+
+resource "azurerm_resource_group" "broken" {`;
+    const graph = parseTerraformContent(content, '/workspace/broken.tf');
+
+    assert.equal(graph.diagnostics.length, 1);
+    assert.equal(graph.diagnostics[0].message, 'Could not parse Terraform blocks in this file.');
+  });
+
   it('ignores Terraform expression references and keeps exact ranges for unmapped resources', () => {
     const content = `resource "azurerm_storage_account" "main" {
   tags = var.tags
@@ -136,6 +164,19 @@ resource "google_compute_instance" "app" {
     assert.ok(extensionSource.includes("'workbench.action.chat.open'"));
     assert.ok(readme.includes('/terraform-architecture-documentation-generated'));
     assert.ok(readme.includes('model selected in your current chat'));
+  });
+
+  it('renders navigable diagnostics and a compact webview warning summary', () => {
+    const extensionSource = fs.readFileSync(path.join(process.cwd(), 'src/extension.ts'), 'utf8');
+    const webviewSource = fs.readFileSync(path.join(process.cwd(), 'src/webview.ts'), 'utf8');
+
+    assert.ok(extensionSource.includes("registerCommand('terraformViewer.openDiagnostic'"));
+    assert.ok(extensionSource.includes('this.graph.diagnostics.map'));
+    assert.ok(extensionSource.includes('sourceFileName(diagnostic.sourceUri)'));
+    assert.ok(webviewSource.includes('diagnosticSummary'));
+    assert.ok(webviewSource.includes('diagnosticDetails'));
+    assert.ok(webviewSource.includes('title="${diagnosticDetails}"'));
+    assert.ok(webviewSource.includes('max-width: min(38vw, 420px)'));
   });
 
   it('defines the selectable layouts with technical names and image export', () => {

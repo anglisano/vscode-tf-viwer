@@ -57,7 +57,7 @@ resource "aws_instance" "main" {
 
 Local modules are inspected and their nodes are namespace-prefixed, for example `module.network.aws_vpc.main`. A module from a registry, Git, or HTTP source is shown as an unresolved boundary when its source is not already available locally. Terraform is not executed and modules are not downloaded automatically.
 
-References that cannot be mapped to an available node are listed with their file, source range, and reason instead of being silently discarded. Dynamic expressions, variables, outputs, and full HCL evaluation remain intentionally limited.
+References that cannot be mapped to an available node are listed with their file, source range, and reason instead of being silently discarded. Valid `variable` and `output` blocks are accepted without parse diagnostics, but they are not rendered as graph nodes. Dynamic expressions and full HCL evaluation remain intentionally limited.
 
 The repository includes a no-credentials multi-cloud integration fixture at `test/fixtures/multicloud-workspace`, with AWS and Google resources, a data source, an accessible local module, an inaccessible external module, and an intentionally unmapped reference.
 

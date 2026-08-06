@@ -25,7 +25,12 @@ export function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.
     }),
     edges: graph.edges.map((edge) => ({ data: { id: edge.id, source: edge.source, target: edge.target } }))
   });
-  const diagnostics = escapeHtml(graph.diagnostics.map((diagnostic) => diagnostic.message).join('\n'));
+  const diagnosticSummary = graph.diagnostics.length === 0
+    ? ''
+    : `${graph.diagnostics.length} warning${graph.diagnostics.length === 1 ? '' : 's'}`;
+  const diagnosticDetails = escapeHtml(graph.diagnostics
+    .map((diagnostic) => `${diagnostic.message} (${diagnostic.sourceUri})`)
+    .join('\n'));
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -39,7 +44,7 @@ export function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.
     body { display: flex; flex-direction: column; height: 100vh; margin: 0; background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); font-family: var(--vscode-font-family); }
     #toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 42px; padding: 6px 12px; border-bottom: 1px solid var(--vscode-panel-border); box-sizing: border-box; }
     #cy { flex: 1; min-height: 0; width: 100vw; }
-    #diagnostics { color: var(--vscode-editorWarning-foreground); white-space: pre-wrap; }
+    #diagnostics { color: var(--vscode-editorWarning-foreground); max-width: min(38vw, 420px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #legend { color: var(--vscode-descriptionForeground); margin-left: auto; font-size: 12px; }
     select { color: var(--vscode-dropdown-foreground); background: var(--vscode-dropdown-background); border: 1px solid var(--vscode-dropdown-border); padding: 5px 8px; cursor: pointer; }
     button { color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: 0; padding: 5px 10px; cursor: pointer; }
@@ -47,7 +52,7 @@ export function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.
   </style>
 </head>
 <body>
-  <div id="toolbar"><select id="layout" aria-label="Graph layout"><option value="technical">Technical (concentric)</option><option value="hierarchical">Hierarchical (dagre)</option><option value="architecture" selected>Architecture (elk)</option><option value="radial">Radial (circle)</option><option value="grid">Grid (grid)</option><option value="free">Free (cose)</option></select><button id="save-image" type="button" title="Save a PNG image of the graph">↓ Save image</button><button id="fit" type="button">Fit graph</button><button id="generate-prompt" type="button">Generate Documentation Prompt</button><span id="count"></span><span id="diagnostics">${diagnostics}</span><span id="legend">Architecture (elk) · Click a resource to open Terraform</span></div>
+  <div id="toolbar"><select id="layout" aria-label="Graph layout"><option value="technical">Technical (concentric)</option><option value="hierarchical">Hierarchical (dagre)</option><option value="architecture" selected>Architecture (elk)</option><option value="radial">Radial (circle)</option><option value="grid">Grid (grid)</option><option value="free">Free (cose)</option></select><button id="save-image" type="button" title="Save a PNG image of the graph">↓ Save image</button><button id="fit" type="button">Fit graph</button><button id="generate-prompt" type="button">Generate Documentation Prompt</button><span id="count"></span><span id="diagnostics" title="${diagnosticDetails}">${diagnosticSummary}</span><span id="legend">Architecture (elk) · Click a resource to open Terraform</span></div>
   <div id="cy" aria-label="Terraform architecture graph"></div>
   <script nonce="${nonce}" src="${cytoscapeUri}"></script>
   <script nonce="${nonce}" src="${dagreUri}"></script>

@@ -60,7 +60,7 @@ export function parseTerraformContent(content: string, sourceUri: string): Terra
     }
   }
 
-  if (blocks.length === 0 && content.trim().length > 0 && /\b(resource|data|module)\b/.test(content)) {
+  if (blocks.length === 0 && content.trim().length > 0 && containsSupportedBlockSyntax(content)) {
     diagnostics.push({
       message: 'Could not parse Terraform blocks in this file.',
       sourceUri,
@@ -71,9 +71,14 @@ export function parseTerraformContent(content: string, sourceUri: string): Terra
   return { nodes, edges: [...edges].map(([id, edge]) => ({ id, ...edge })), diagnostics, unmappedItems: [] };
 }
 
+function containsSupportedBlockSyntax(content: string): boolean {
+  return /\b(resource|data|module)\s+"[^"]+"(?:\s+"[^"]+")?\s*\{/.test(maskComments(content));
+}
+
 function findBlocks(content: string): ParsedBlock[] {
   const blocks: ParsedBlock[] = [];
-  for (const match of content.matchAll(blockPattern)) {
+  const searchableContent = maskComments(content);
+  for (const match of searchableContent.matchAll(blockPattern)) {
     const openingBrace = content.indexOf('{', (match.index ?? 0) + match[0].length - 1);
     const closingBrace = findMatchingBrace(content, openingBrace);
     if (openingBrace < 0 || closingBrace < 0) {
@@ -90,6 +95,41 @@ function findBlocks(content: string): ParsedBlock[] {
     });
   }
   return blocks;
+}
+
+function maskComments(content: string): string {
+  let result = '';
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let index = 0; index < content.length; index += 1) {
+    const character = content[index];
+    const next = content[index + 1];
+    if (inLineComment) {
+      result += character === '\n' ? '\n' : ' ';
+      inLineComment = character !== '\n';
+    } else if (inBlockComment) {
+      result += character === '\n' ? '\n' : ' ';
+      if (character === '*' && next === '/') {
+        result += ' ';
+        index += 1;
+        inBlockComment = false;
+      }
+    } else if ((character === '/' && next === '/') || character === '#') {
+      result += character === '#' ? ' ' : '  ';
+      if (character === '/') {
+        index += 1;
+      }
+      inLineComment = true;
+    } else if (character === '/' && next === '*') {
+      result += '  ';
+      index += 1;
+      inBlockComment = true;
+    } else {
+      result += character;
+    }
+  }
+  return result;
 }
 
 function providerFromType(type: string): string {

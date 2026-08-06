@@ -22,6 +22,7 @@ export function run(_testRoot: unknown, callback: (error?: Error, failures?: num
     assert.equal(graph.nodes.find((node) => node.id === 'azurerm_storage_blob.sample')?.provider, 'azurerm');
     assert.equal(graph.nodes.find((node) => node.id === 'oci_core_vcn.main')?.provider, 'oci');
     assert.ok(graph.nodes.some((node) => node.id === 'data.aws_ami.ubuntu'));
+    assert.equal(graph.diagnostics.length, 0);
     assert.ok(graph.nodes.some((node) => node.id === 'module.network.aws_vpc.main'));
     assert.equal(graph.nodes.find((node) => node.id === 'module.external')?.resolution, 'unresolved');
     assert.ok(graph.unmappedItems.some((item) => item.target === 'aws_security_group.missing'));
