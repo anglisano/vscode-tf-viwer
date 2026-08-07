@@ -19,7 +19,8 @@ export function graphToMermaid(graph: TerraformGraph): string {
     lines.push(`  ${mermaidId(node.id)}["${escapeLabel(label)}"]`);
   }
   for (const edge of graph.edges) {
-    lines.push(`  ${mermaidId(edge.source)} --> ${mermaidId(edge.target)}`);
+    const connector = edge.kind === 'contains' ? '-.-' : '-->';
+    lines.push(`  ${mermaidId(edge.source)} ${connector} ${mermaidId(edge.target)}`);
   }
   return `${lines.join('\n')}\n`;
 }

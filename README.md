@@ -18,6 +18,8 @@ Terraform Viewer is a VS Code extension for inspecting multi-provider Terraform 
 - Saves the complete graph as a PNG image with **Save image**.
 - Reports unreadable or unsupported Terraform files without hiding valid resources from other files.
 - Generates a Copilot prompt file with the current Mermaid graph for generating architecture documentation.
+- Can optionally download Git-based external modules into `.vscode/terraform-viewer/modules/` for deeper graph expansion.
+- Remembers one global external-module decision per workspace in `.vscode/terraform-viewer/decisions.json`.
 
 ## Usage
 
@@ -55,7 +57,9 @@ resource "aws_instance" "main" {
 }
 ```
 
-Local modules are inspected and their nodes are namespace-prefixed, for example `module.network.aws_vpc.main`. A module from a registry, Git, or HTTP source is shown as an unresolved boundary when its source is not already available locally. Terraform is not executed and modules are not downloaded automatically.
+Local modules are inspected and their nodes are namespace-prefixed, for example `module.network.aws_vpc.main`. Git-based external modules can be downloaded after one global project decision and are read from the viewer-only cache at `.vscode/terraform-viewer/modules/`. The decision is stored as `download` or `skip` in `.vscode/terraform-viewer/decisions.json`; use **Terraform Viewer: Reset External Module Decision** to ask again. The original `source` declarations and Terraform files are never changed, and the extension does not execute `terraform init`, `plan`, or `apply`. Registry modules, HTTP archives, private repositories, and sources requiring credentials may remain unresolved.
+
+The integration fixture includes a seed module at `test/fixtures/terraform-viewer-dummy-module`. Publish that directory as `terraform-viewer-dummy-module`, tag it `v1.0.0`, and ensure the GitHub URL in `test/fixtures/multicloud-workspace/main.tf` matches the account that owns it before testing the opt-in download path.
 
 References that cannot be mapped to an available node are listed with their file, source range, and reason instead of being silently discarded. Valid `variable` and `output` blocks are accepted without parse diagnostics, but they are not rendered as graph nodes. Dynamic expressions and full HCL evaluation remain intentionally limited.
 

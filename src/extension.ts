@@ -3,6 +3,7 @@ import type { TerraformGraph, TerraformNode } from './model';
 import { buildWorkspaceGraph } from './workspace';
 import { getWebviewContent } from './webview';
 import { buildDocumentationPrompt, DEFAULT_DOCUMENTATION_PROMPT } from './mermaid';
+import { readExternalModulePolicy, resetExternalModulePolicy, writeExternalModulePolicy } from './externalModuleDecisions';
 
 let panel: vscode.WebviewPanel | undefined;
 let latestGraph: TerraformGraph | undefined;
@@ -13,6 +14,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.registerTreeDataProvider('terraformViewer.sidebar', sidebar),
     vscode.commands.registerCommand('terraformViewer.showGraph', () => runSafely(() => showGraph(context, sidebar))),
     vscode.commands.registerCommand('terraformViewer.refreshGraph', () => runSafely(() => refreshGraph(context, sidebar))),
+    vscode.commands.registerCommand('terraformViewer.resetExternalModuleDecision', () => runSafely(() => resetExternalModuleDecision(context, sidebar))),
     vscode.commands.registerCommand('terraformViewer.openUnmapped', (index: number) => latestGraph ? openUnmapped(latestGraph, index) : undefined),
     vscode.commands.registerCommand('terraformViewer.openDiagnostic', (index: number) => latestGraph ? openDiagnostic(latestGraph, index) : undefined),
     vscode.commands.registerCommand('terraformViewer.copyUnmapped', () => latestGraph ? copyUnmappedToFile(latestGraph) : undefined),
@@ -127,11 +129,50 @@ async function generateDocumentationPrompt(basePrompt: string, graph: TerraformG
 }
 
 async function refreshGraph(context: vscode.ExtensionContext, sidebar: TerraformSidebarProvider): Promise<void> {
-  latestGraph = await buildWorkspaceGraph();
+  let externalDownloadDecision: Promise<boolean> | undefined;
+  latestGraph = await buildWorkspaceGraph({
+    confirmExternalModule: async () => {
+      externalDownloadDecision ??= getExternalModuleDecision();
+      return externalDownloadDecision;
+    }
+  });
   sidebar.update(latestGraph);
   if (panel) {
     panel.webview.html = getWebviewContent(panel.webview, context.extensionUri, latestGraph);
   }
+}
+
+async function getExternalModuleDecision(): Promise<boolean> {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (!workspaceFolder) {
+    return false;
+  }
+  const savedPolicy = await readExternalModulePolicy(workspaceFolder.uri.fsPath);
+  if (savedPolicy) {
+    return savedPolicy === 'download';
+  }
+  const cachePath = workspaceFolder
+    ? vscode.Uri.joinPath(workspaceFolder.uri, '.vscode', 'terraform-viewer', 'modules').fsPath
+    : '.vscode/terraform-viewer/modules';
+  const choice = await vscode.window.showInformationMessage(
+    `External Terraform modules can be downloaded to ${cachePath} for graph rendering. This only creates a viewer cache and does not modify Terraform or affect plan/apply. Apply this choice to all external modules in this project?`,
+    'Download all',
+    'Skip all'
+  );
+  const policy = choice === 'Download all' ? 'download' : 'skip';
+  await writeExternalModulePolicy(workspaceFolder.uri.fsPath, policy);
+  return policy === 'download';
+}
+
+async function resetExternalModuleDecision(context: vscode.ExtensionContext, sidebar: TerraformSidebarProvider): Promise<void> {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (!workspaceFolder) {
+    void vscode.window.showWarningMessage('Open a workspace before resetting external module decisions.');
+    return;
+  }
+  await resetExternalModulePolicy(workspaceFolder.uri.fsPath);
+  void vscode.window.showInformationMessage('External module decision reset. The next graph refresh will ask again.');
+  await refreshGraph(context, sidebar);
 }
 
 async function openNode(node: TerraformNode | undefined): Promise<void> {

@@ -37,7 +37,7 @@ export function parseTerraformContent(content: string, sourceUri: string): Terra
     });
   }
 
-  const edges = new Map<string, { source: string; target: string; sourceRange: SourceRange }>();
+  const edges = new Map<string, { source: string; target: string; kind: 'reference'; sourceRange: SourceRange }>();
   for (const block of blocks) {
     const source = block.kind === 'data'
       ? `data.${block.type}.${block.name}`
@@ -55,7 +55,7 @@ export function parseTerraformContent(content: string, sourceUri: string): Terra
       if (target !== source) {
         const id = `${source}->${target}`;
         const start = block.bodyStart + (match.index ?? 0);
-        edges.set(id, { source, target, sourceRange: rangeForOffsets(content, start, start + match[1].length) });
+        edges.set(id, { source, target, kind: 'reference', sourceRange: rangeForOffsets(content, start, start + match[1].length) });
       }
     }
   }

@@ -2,7 +2,7 @@
   "name": "terraform-viewer",
   "displayName": "Terraform Viewer",
   "description": "Visualize multi-provider Terraform resources, data sources, and modules in VS Code.",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "icon": "media/icon.png",
   "publisher": "anglisano",
   "license": "MIT",
@@ -36,6 +36,11 @@
       {
         "command": "terraformViewer.refreshGraph",
         "title": "Terraform Viewer: Refresh Graph",
+        "category": "Terraform Viewer"
+      },
+      {
+        "command": "terraformViewer.resetExternalModuleDecision",
+        "title": "Terraform Viewer: Reset External Module Decision",
         "category": "Terraform Viewer"
       }
     ],
@@ -74,6 +79,9 @@
         },
         {
           "command": "terraformViewer.refreshGraph"
+        },
+        {
+          "command": "terraformViewer.resetExternalModuleDecision"
         }
       ],
       "view/title": [
