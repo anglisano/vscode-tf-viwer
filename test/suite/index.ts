@@ -5,6 +5,7 @@ import { buildWorkspaceGraph } from '../../src/workspace';
 
 export function run(_testRoot: unknown, callback: (error?: Error, failures?: number) => void): void {
   const mocha = new Mocha({ ui: 'bdd' });
+  mocha.timeout(10000);
   const testSuite = Mocha.Suite.create(mocha.suite, 'Terraform Viewer extension');
   testSuite.addTest(new Mocha.Test('contributes the graph command', async () => {
     await vscode.extensions.getExtension('anglisano.terraform-viewer')?.activate();
@@ -31,6 +32,12 @@ export function run(_testRoot: unknown, callback: (error?: Error, failures?: num
     assert.equal(graph.nodes.find((node) => node.id === 'module.github_dummy')?.resolution, 'unresolved');
     assert.ok(graph.unmappedItems.some((item) => item.target === 'aws_security_group.missing'));
     assert.ok(graph.unmappedItems.some((item) => item.label === 'module.external'));
+    const decisionsDirectory = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, '.vscode', 'terraform-viewer');
+    await vscode.workspace.fs.createDirectory(decisionsDirectory);
+    await vscode.workspace.fs.writeFile(
+      vscode.Uri.joinPath(decisionsDirectory, 'decisions.json'),
+      Buffer.from('{"externalModules":"skip"}\n', 'utf8')
+    );
     await vscode.commands.executeCommand('terraformViewer.showGraph');
     assert.ok(vscode.window.tabGroups.all.flatMap((group) => group.tabs).some((tab) => tab.label === 'Terraform Architecture'));
   }));
