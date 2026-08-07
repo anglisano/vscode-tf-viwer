@@ -1,10 +1,15 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { parseTerraformContent } from './parser';
+import { resolveExternalModule } from './externalModules';
 import type { TerraformGraph, TerraformNode } from './model';
 
-export async function buildWorkspaceGraph(): Promise<TerraformGraph> {
-  const files = await vscode.workspace.findFiles('**/*.tf', '**/{.terraform,.git,node_modules,out,dist,modules}/**');
+export interface WorkspaceGraphOptions {
+  confirmExternalModule?: (source: string) => Promise<boolean>;
+}
+
+export async function buildWorkspaceGraph(options: WorkspaceGraphOptions = {}): Promise<TerraformGraph> {
+  const files = await vscode.workspace.findFiles('**/*.tf', '**/{.terraform,.git,node_modules,out,dist,modules,.vscode/terraform-viewer}/**');
   const graphs = await Promise.all(files.map(async (file) => {
     try {
       const document = await vscode.workspace.openTextDocument(file);
@@ -19,7 +24,7 @@ export async function buildWorkspaceGraph(): Promise<TerraformGraph> {
     }
   }));
 
-  const expandedGraphs = await expandLocalModules(graphs);
+  const expandedGraphs = await expandModules(graphs, options);
   const nodes = [...new Map(expandedGraphs.flatMap((graph) => graph.nodes).map((node) => [node.id, node])).values()];
   const nodeIds = new Set(nodes.map((node) => node.id));
   const edges = [...new Map(
@@ -55,27 +60,61 @@ export async function buildWorkspaceGraph(): Promise<TerraformGraph> {
   return { nodes, edges, diagnostics: expandedGraphs.flatMap((graph) => graph.diagnostics), unmappedItems };
 }
 
-async function expandLocalModules(graphs: TerraformGraph[]): Promise<TerraformGraph[]> {
+async function expandModules(graphs: TerraformGraph[], options: WorkspaceGraphOptions): Promise<TerraformGraph[]> {
   const expanded = [...graphs];
   for (const graph of graphs) {
     for (const moduleNode of graph.nodes.filter((node) => node.kind === 'module' && node.source)) {
       const modulePath = resolveLocalModulePath(moduleNode);
-      if (!modulePath) {
+      if (modulePath) {
+        await appendModuleGraphs(expanded, moduleNode, modulePath);
         continue;
       }
-      moduleNode.resolution = 'resolved';
-      const moduleFiles = await vscode.workspace.findFiles(
-        new vscode.RelativePattern(vscode.Uri.file(modulePath), '**/*.tf'),
-        '**/{.terraform,.git,node_modules}/**'
-      );
-      const moduleGraphs = await Promise.all(moduleFiles.map(async (file) => {
-        const document = await vscode.workspace.openTextDocument(file);
-        return namespaceGraph(parseTerraformContent(document.getText(), file.toString()), moduleNode.id);
-      }));
-      expanded.push(...moduleGraphs);
+      if (!options.confirmExternalModule) {
+        continue;
+      }
+      const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.parse(moduleNode.sourceUri));
+      if (!workspaceFolder) {
+        continue;
+      }
+      const result = await resolveExternalModule(moduleNode.source!, {
+        cacheRoot: path.join(workspaceFolder.uri.fsPath, '.vscode', 'terraform-viewer', 'modules'),
+        confirmDownload: options.confirmExternalModule
+      });
+      if (!result.modulePath) {
+        continue;
+      }
+      await appendModuleGraphs(expanded, moduleNode, result.modulePath);
     }
   }
   return expanded;
+}
+
+async function appendModuleGraphs(expanded: TerraformGraph[], moduleNode: TerraformNode, modulePath: string): Promise<void> {
+  const moduleFiles = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(vscode.Uri.file(modulePath), '**/*.tf'),
+    '**/{.terraform,.git,node_modules}/**'
+  );
+  if (moduleFiles.length === 0) {
+    return;
+  }
+  moduleNode.resolution = 'resolved';
+  const moduleGraphs = await Promise.all(moduleFiles.map(async (file) => {
+    const document = await vscode.workspace.openTextDocument(file);
+    return namespaceGraph(parseTerraformContent(document.getText(), file.toString()), moduleNode.id);
+  }));
+  expanded.push(...moduleGraphs);
+  const containedNodes = moduleGraphs.flatMap((graph) => graph.nodes);
+  expanded.push({
+    nodes: [],
+    edges: containedNodes.map((node) => ({
+      id: `${moduleNode.id}::contains::${node.id}`,
+      source: moduleNode.id,
+      target: node.id,
+      kind: 'contains' as const
+    })),
+    diagnostics: [],
+    unmappedItems: []
+  });
 }
 
 function resolveLocalModulePath(moduleNode: TerraformNode): string | undefined {

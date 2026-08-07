@@ -8,5 +8,6 @@ vsix-inspect/
 .DS_Store
 .github/prompts/*
 .vscode/terraform-viewer/
+**/.vscode/terraform-viewer/
 .vscode/branchnotes/
 .npm-cache/*

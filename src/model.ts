@@ -23,6 +23,7 @@ export interface TerraformEdge {
   id: string;
   source: string;
   target: string;
+  kind: 'reference' | 'contains';
   sourceRange?: SourceRange;
 }
 

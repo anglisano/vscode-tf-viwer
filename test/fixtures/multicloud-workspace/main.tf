@@ -80,6 +80,10 @@ module "external" {
   source = "git::https://example.invalid/terraform/nonexistent.git"
 }
 
+module "github_dummy" {
+  source = "git::https://github.com/anglisano/terraform-viewer-dummy-module.git?ref=v1.0.0"
+}
+
 resource "aws_instance" "app" {
   ami           = data.aws_ami.ubuntu.id
   subnet_id     = module.network.subnet_id

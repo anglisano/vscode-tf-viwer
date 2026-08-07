@@ -23,7 +23,7 @@ export function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.
         }
       };
     }),
-    edges: graph.edges.map((edge) => ({ data: { id: edge.id, source: edge.source, target: edge.target } }))
+    edges: graph.edges.map((edge) => ({ data: { id: edge.id, source: edge.source, target: edge.target, kind: edge.kind } }))
   });
   const diagnosticSummary = graph.diagnostics.length === 0
     ? ''
@@ -86,7 +86,8 @@ export function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.
     const cy = cytoscape({ container: document.getElementById('cy'), elements: [...graph.nodes, ...graph.edges], layout: layoutOptions('architecture'), style: [
       { selector: 'node', style: { 'background-color': (node) => categoryColors[node.data('category')] || categoryColors.General, 'label': 'data(displayLabel)', 'text-wrap': 'wrap', 'text-max-width': 130, 'color': '#ffffff', 'text-valign': 'center', 'text-halign': 'center', 'font-size': 10, 'font-weight': 'bold', 'width': 130, 'height': 52, 'padding': 6, 'border-width': 2, 'border-color': '#ffffff' } },
       { selector: 'node[resolution = "unresolved"]', style: { 'background-color': '#616161', 'border-style': 'dashed', 'border-color': '#f2c94c' } },
-      { selector: 'edge', style: { 'line-color': '#7f8c8d', 'target-arrow-color': '#7f8c8d', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'width': 2 } }
+      { selector: 'edge', style: { 'line-color': '#7f8c8d', 'target-arrow-color': '#7f8c8d', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'width': 2 } },
+      { selector: 'edge[kind = "contains"]', style: { 'line-color': '#aab4b8', 'target-arrow-shape': 'none', 'line-style': 'dashed', 'width': 1.5 } }
     ] });
     document.getElementById('count').textContent = graph.nodes.length + ' resources';
     document.getElementById('fit').addEventListener('click', () => cy.fit(undefined, 24));
